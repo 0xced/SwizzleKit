@@ -38,7 +38,7 @@ id UNIQUE_PREFIXobject_getMapTableVariable(id anObject, const char* variableName
 	static NSMapTable * mapTable = nil;
 	if (!mapTable){
 		if ([[anObject class] respondsToSelector:@selector(mapTable)]){
-			mapTable  = [[anObject class] mapTable];
+			mapTable  = [[anObject class] performSelector:@selector(mapTable)];
 		}
 	}
 	id theValue = nil;
@@ -60,7 +60,7 @@ void UNIQUE_PREFIXobject_setMapTableVariable(id anObject, const char* variableNa
 	static NSMapTable * mapTable = nil;
 	if (!mapTable){
 		if ([[anObject class] respondsToSelector:@selector(mapTable)]){
-			mapTable  = [[anObject class] mapTable];
+			mapTable  = [[anObject class] performSelector:@selector(mapTable)];
 		}
 	}
 	if (mapTable){
@@ -125,7 +125,7 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 	
 	unsigned int ivarCount =0;
 	Ivar * ivars = class_copyIvarList(providerClass, &ivarCount);
-	int ci = 0;
+	unsigned int ci = 0;
 	for (ci=0 ;ci < ivarCount; ci++){
 		Ivar anIvar = ivars[ci];
 		
@@ -134,7 +134,6 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 		const char * typeEncoding = ivar_getTypeEncoding(anIvar);
 		NSGetSizeAndAlignment(typeEncoding, &ivarSize, &ivarAlignment);
 		const char * ivarName = ivar_getName(anIvar);
-		NSString * ivarStringName = [NSString stringWithUTF8String:ivarName];
 		BOOL addIVarResult = class_addIvar(subclass, ivarName, ivarSize, ivarAlignment, typeEncoding  );
 		if (!addIVarResult){
 			NSLog(@"could not add iVar %s", ivar_getName(anIvar));

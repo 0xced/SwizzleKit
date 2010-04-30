@@ -20,9 +20,6 @@
 #include <stdio.h>
 
 
-#define BUNDLE_IDENTIFIER @"com.yourBundle.identifier"
-
-
 //  Unique Prefixes
 //
 // if you are using SwizzleKit for use in plugins into host applications, there is the possibility of multiple plugins using swizzlekit, leading to naming collisions.   Defining a unique prefix should prevent this (unless, ofcourse, you use a prefix already in use.
@@ -302,8 +299,6 @@ void UNIQUE_PREFIXobject_setMapTableVariable(id anObject, const char* variableNa
 
 @interface UNIQUE_PREFIXSwizzler : NSObject{
 }
-+(void)setPrefix:(NSString*)prefix;
-+(void)setProviderSuffix:(NSString*)suffix;
 +(Class)subclass:(Class)baseClass usingClassName:(NSString*)subclassName providerClass:(Class)providerClass;
 +(void)extendClass:(Class) targetClass withMethodsFromClass:(Class)providerClass;
 +(BOOL)addClassMethodName:(NSString *)methodName fromProviderClass:(Class)providerClass toClass:(Class)targetClass;
