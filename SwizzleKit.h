@@ -315,9 +315,6 @@ void UNIQUE_PREFIXobject_setMapTableVariable(id anObject, const char* variableNa
 @end
 
 
-@end
-
-
 @interface NSThread (SwizzleKit)
 +(NSArray*)abbreviatedCallStackSymbols;
 @end

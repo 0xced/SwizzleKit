@@ -7,7 +7,7 @@
 //
 //  ------------------------------------------------------------------------
 
-#import "SwizzleKit.m"
+#import "SwizzleKit.h"
 #define SWIZZLE_PREFIX @"UNIQUE_PREFIX"
 #define PROVIDER_SUFFIX @"UNIQUE_PREFIX"
 
