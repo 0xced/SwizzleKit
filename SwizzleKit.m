@@ -173,41 +173,26 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 	
 	methods  = 0;
 }
-+(BOOL)addClassMethodName:(NSString *)methodName fromProviderClass:(Class)providerClass toClass:(Class)targetClass{
-	Class metaClass = object_getClass(targetClass);// objc_getMetaClass(class_getName(targetClass));
-	if (!metaClass) {
-		return NO;
-	}
-	SEL selector = NSSelectorFromString(methodName);
-	Method originalMethod = class_getClassMethod(providerClass,selector);
-	
-	if (!originalMethod) {
-		return NO;
-	}
-	
-	IMP originalImplementation  = method_getImplementation(originalMethod);
-	if (!originalImplementation){
-		return NO;
-	}
-	
-	class_addMethod(metaClass, selector ,originalImplementation, method_getTypeEncoding(originalMethod));
-	
-	return YES;
-}
 
-+(BOOL)addInstanceMethodName:(NSString *)methodName fromProviderClass:(Class)providerClass toClass:(Class)targetClass{
++(BOOL)addMethodName:(NSString *)methodName fromProviderClass:(Class)providerClass toClass:(Class)class isClassMethod:(BOOL)isClassMethod
+{
+	Class targetClass = class;
+	if (isClassMethod) {
+		targetClass = object_getClass(targetClass); // meta class
+	}
+	
 	if (!targetClass) {
 		return NO;
 	}
 	SEL selector = NSSelectorFromString(methodName);
-	Method originalMethod = class_getInstanceMethod(providerClass,selector);
+	Method originalMethod = isClassMethod ? class_getClassMethod(providerClass,selector) : class_getInstanceMethod(providerClass,selector);
 	
 	if (!originalMethod) {
 		return NO;
 	}
 	
-	IMP originalImplementation  = method_getImplementation(originalMethod);
-	if (!originalImplementation){
+	IMP originalImplementation = method_getImplementation(originalMethod);
+	if (!originalImplementation) {
 		return NO;
 	}
 	
@@ -216,95 +201,73 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 	return YES;
 }
 
-+(IMP)swizzleClassMethod:(NSString*)methodName forClass:(Class)targetClass{
-	Method oldMethod, newMethod;
-	IMP newIMP = nil;
-	SEL oldSelector = NSSelectorFromString(methodName);
-	NSString * newMethodName = [SWIZZLE_PREFIX stringByAppendingString:methodName];
-	SEL newSelector = NSSelectorFromString(newMethodName);
-	
-	oldMethod = class_getClassMethod(targetClass, oldSelector);
-	if (oldMethod==NULL) {
-		NSLog(@"SWIZZLE Error - Can't find existing method for +[%@ %@]",NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
-		//Debugger();
-		return NULL;
-	}
-	newMethod = class_getClassMethod(targetClass, newSelector);
-	if (newMethod==NULL) {
-		//look for a provider Class
-		NSString * providerClassName = [NSStringFromClass(targetClass) stringByAppendingString:PROVIDER_SUFFIX];
-		Class providerClass = NSClassFromString(providerClassName);
-		if (providerClass){
-			[self addClassMethodName: newMethodName fromProviderClass:providerClass toClass:targetClass];
-			newMethod = class_getClassMethod(targetClass, newSelector);
-			if (newMethod==NULL) {
-				NSLog(@"SWIZZLE Error - Can't find existing method for +[%@ %@]",NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
-				return NULL;
-			}
-		}
-		else{
-			NSLog(@"SWIZZLE Error - Can't find existing method for +[%@ %@]",NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
-			return NULL;
-		}
-		
-		//Debugger();
-	}
-	if (NULL != oldMethod && NULL != newMethod) {
-		//newIMP = 
-		newIMP= method_getImplementation(oldMethod);
-		method_exchangeImplementations(oldMethod, newMethod);
-		
-		//newIMP = method_setImplementation(oldMethod,method_getImplementation(newMethod));
-		//method_setImplementation(newMethod, newIMP);
-		return newIMP;
-	}
-	
-	return NULL;
++(BOOL)addClassMethodName:(NSString *)methodName fromProviderClass:(Class)providerClass toClass:(Class)targetClass
+{
+	return [self addMethodName:methodName fromProviderClass:providerClass toClass:targetClass isClassMethod:YES];
 }
-+(IMP)swizzleInstanceMethod:(NSString*)methodName forClass:(Class)targetClass{
-	//NSLog (@"Trying to swizzle %@ method: %@",targetClass,methodName);
+
++(BOOL)addInstanceMethodName:(NSString *)methodName fromProviderClass:(Class)providerClass toClass:(Class)targetClass
+{
+	return [self addMethodName:methodName fromProviderClass:providerClass toClass:targetClass isClassMethod:NO];
+}
+
++(IMP)swizzleMethod:(NSString*)methodName forClass:(Class)targetClass isClassMethod:(BOOL)isClassMethod
+{
+	NSString *kindSymbol = isClassMethod ? @"+" : @"-";
+	Method (*class_getMethod)(Class cls, SEL name) = isClassMethod ? class_getClassMethod : class_getInstanceMethod;
+	
 	Method oldMethod, newMethod;
-	IMP oldIMP = nil;
 	SEL oldSelector = NSSelectorFromString(methodName);
 	NSString * newMethodName = [SWIZZLE_PREFIX stringByAppendingString:methodName];
 	SEL newSelector = NSSelectorFromString(newMethodName);
 	
-	oldMethod = class_getInstanceMethod(targetClass, oldSelector);
-	if (oldMethod==NULL) {
-		NSLog(@"SWIZZLE Error - Can't find existing method for -[%@ %@]",NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
-		//Debugger();
+	oldMethod = class_getMethod(targetClass, oldSelector);
+	if (oldMethod == NULL) {
+		NSLog(@"SWIZZLE Error - Can't find existing method for %@[%@ %@]",kindSymbol,NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
 		return NULL;
 	}
-	newMethod = class_getInstanceMethod(targetClass, newSelector);
-	if (newMethod==NULL) {
+	newMethod = class_getMethod(targetClass, newSelector);
+	if (newMethod == NULL) {
 		//look for a provider Class
 		NSString * providerClassName = [NSStringFromClass(targetClass) stringByAppendingString:PROVIDER_SUFFIX];
 		Class providerClass = NSClassFromString(providerClassName);
-		if (providerClass){
-			[self addInstanceMethodName: newMethodName fromProviderClass:providerClass toClass:targetClass];
-			newMethod = class_getInstanceMethod(targetClass, newSelector);
+		if (providerClass) {
+			BOOL methodAdded = [self addMethodName:newMethodName fromProviderClass:providerClass toClass:targetClass isClassMethod:isClassMethod];
+			if (!methodAdded) {
+				NSLog(@"SWIZZLE Error - Can't add %@%@ method to %@",kindSymbol,newMethodName,providerClassName);
+				return NULL;
+			}
+			newMethod = class_getMethod(targetClass, newSelector);
 			if (newMethod==NULL) {
-				NSLog(@"SWIZZLE Error - Can't find existing method for -[%@ %@]",NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
+				NSLog(@"SWIZZLE Error - Can't find method for %@[%@ %@]",kindSymbol,providerClassName,NSStringFromSelector(newSelector));
 				return NULL;
 			}
 		}
-		else{
-			NSLog(@"SWIZZLE Error - Can't find existing method for -[%@ %@]",NSStringFromClass(targetClass),NSStringFromSelector(oldSelector));
+		else {
+			NSLog(@"SWIZZLE Error - Provider class not found (%@)",providerClassName);
 			return NULL;
 		}
-		
-		//Debugger();
 	}
+	
 	if (NULL != oldMethod && NULL != newMethod) {
-		//newIMP = method_exchangeImplementations(, )
-		oldIMP = method_setImplementation(oldMethod,method_getImplementation(newMethod));
-		method_setImplementation(newMethod, oldIMP);
-		
+		IMP oldIMP = method_getImplementation(oldMethod);
+		method_exchangeImplementations(oldMethod, newMethod);
 		return oldIMP;
 	}
 	
 	return NULL;
 }
+
++(IMP)swizzleClassMethod:(NSString*)methodName forClass:(Class)targetClass
+{
+	return [self swizzleMethod:methodName forClass:targetClass isClassMethod:YES];
+}
+
++(IMP)swizzleInstanceMethod:(NSString*)methodName forClass:(Class)targetClass
+{
+	return [self swizzleMethod:methodName forClass:targetClass isClassMethod:NO];
+}
+
 @end
 
 
