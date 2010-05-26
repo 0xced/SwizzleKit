@@ -88,9 +88,28 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 		NSMutableString * logString = [NSMutableString string];
 		Class superClass = class_getSuperclass(aClass);
 		const char * superClassName = class_getName(superClass);
-		[logString appendFormat:@"@interface %s : %s\n{",clsName,superClassName];
+		[logString appendFormat:@"@interface %s : %s ",clsName,superClassName];
+		
+		unsigned int protocolCount = 0;
+		NSUInteger ci = 0;
+		Protocol ** protocols = class_copyProtocolList(aClass, &protocolCount);
+		if (protocolCount > 0) {
+			[logString appendString:@"<"];
+		}
+		for (ci = 0; ci < protocolCount; ci++) {
+			Protocol *aProtocol = protocols[ci];
+			[logString appendFormat:@"%s", protocol_getName(aProtocol)];
+			if (ci < (protocolCount - 1)) {
+				[logString appendString:@", "];
+			}
+		}
+		if (protocolCount > 0) {
+			[logString appendString:@"> "];
+		}
+		[logString appendString:@"{\n"];
+		free(protocols);
+		
 		unsigned int ivarCount = 0;
-		NSUInteger ci =0;
 		Ivar * ivars = class_copyIvarList(aClass, &ivarCount);
 		for (ci=0;ci<ivarCount;ci++){
 			[logString appendFormat:@"    %s %s; //%ld\n",ivar_getTypeEncoding(ivars[ci]), ivar_getName(ivars[ci]), ivar_getOffset(ivars[ci])];
@@ -119,14 +138,16 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 }
 
 @implementation UNIQUE_PREFIXSwizzler
-+(Class)subclass:(Class)baseClass usingClassName:(NSString*)subclassName providerClass:(Class)providerClass{
++(Class)subclass:(Class)baseClass usingClassName:(NSString*)subclassName providerClass:(Class)providerClass
+{
 	Class subclass = objc_allocateClassPair(baseClass, [subclassName UTF8String], 0);
 	if (!subclass) return nil;
 	
-	unsigned int ivarCount =0;
+	// copy ivars
+	unsigned int ivarCount = 0;
 	Ivar * ivars = class_copyIvarList(providerClass, &ivarCount);
 	unsigned int ci = 0;
-	for (ci=0 ;ci < ivarCount; ci++){
+	for (ci = 0; ci < ivarCount; ci++){
 		Ivar anIvar = ivars[ci];
 		
 		NSUInteger ivarSize = 0;
@@ -142,12 +163,24 @@ void UNIQUE_PREFIXdescribeClass(const char * clsName){
 	
 	}
 	free(ivars);
+	
+	// copy protocols
+	unsigned int protocolCount = 0;
+	Protocol ** protocols = class_copyProtocolList(providerClass, &protocolCount);
+	for (ci = 0; ci < protocolCount; ci++) {
+		Protocol *aProtocol = protocols[ci];
+		class_addProtocol(subclass, aProtocol);
+	}
+	free(protocols);
+	
 	objc_registerClassPair(subclass);
 	
 	[self extendClass:subclass withMethodsFromClass:providerClass];
 	return subclass;
 }
-+(void)extendClass:(Class) targetClass withMethodsFromClass:(Class)providerClass{
+
++(void)extendClass:(Class) targetClass withMethodsFromClass:(Class)providerClass
+{
 	unsigned int methodCount = 0;
 	Method * methods = nil;
 	
